@@ -1,0 +1,13 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/approve/page": "/approve",
+  "/dashboard/page": "/dashboard",
+  "/data-approval/page": "/data-approval",
+  "/data-entry/page": "/data-entry",
+  "/favicon.ico/route": "/favicon.ico",
+  "/page": "/",
+  "/submit/page": "/submit",
+  "/users/page": "/users",
+  "/verification/page": "/verification"
+}

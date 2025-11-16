@@ -1,0 +1,9 @@
+{
+  "/approve/page": "app/approve/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/data-approval/page": "app/data-approval/page.js",
+  "/data-entry/page": "app/data-entry/page.js",
+  "/page": "app/page.js",
+  "/submit/page": "app/submit/page.js",
+  "/verification/page": "app/verification/page.js"
+}
