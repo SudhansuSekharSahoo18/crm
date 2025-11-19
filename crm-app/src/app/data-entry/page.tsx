@@ -4,20 +4,12 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useApp, hasRole, createAuditEntry } from '@/context/AppContext';
 import Navigation from '@/components/Navigation';
-import { UserRole, BillStatus, Bill, BillDataEntry, LineItem } from '@/types';
+import { UserRole, BillStatus, Bill } from '@/types';
 
 export default function DataEntry() {
   const { user } = useAuth();
   const { state, dispatch } = useApp();
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
-  const [formData, setFormData] = useState({
-    vendor: '',
-    invoiceNumber: '',
-    invoiceDate: '',
-    dueDate: '',
-    category: '',
-    lineItems: [] as LineItem[],
-  });
 
   // Function to refresh bills from backend
   const refreshBills = async () => {
@@ -65,163 +57,62 @@ export default function DataEntry() {
   console.log('Bills for data entry:', billsForDataEntry);
   console.log('All bills in state:', state.bills);
   console.log('Bill statuses:', state.bills.map(b => ({ id: b.id, title: b.title, status: b.status })));
-
-  const addLineItem = () => {
-    setFormData(prev => ({
-      ...prev,
-      lineItems: [
-        ...prev.lineItems,
-        {
-          id: Math.random().toString(36).substr(2, 9),
-          description: '',
-          quantity: 1,
-          unitPrice: 0,
-          total: 0,
-        },
-      ],
-    }));
-  };
-
-  const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
-    setFormData(prev => {
-      const newLineItems = [...prev.lineItems];
-      newLineItems[index] = { ...newLineItems[index], [field]: value };
-      
-      // Recalculate total for this line item
-      if (field === 'quantity' || field === 'unitPrice') {
-        newLineItems[index].total = newLineItems[index].quantity * newLineItems[index].unitPrice;
-      }
-      
-      return { ...prev, lineItems: newLineItems };
-    });
-  };
-
-  const removeLineItem = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      lineItems: prev.lineItems.filter((_, i) => i !== index),
-    }));
-  };
-
   const handleBillSelect = (bill: Bill) => {
     setSelectedBill(bill);
-    if (bill.dataEntry) {
-      setFormData({
-        vendor: bill.dataEntry.vendor,
-        invoiceNumber: bill.dataEntry.invoiceNumber,
-        invoiceDate: bill.dataEntry.invoiceDate.toISOString().split('T')[0],
-        dueDate: bill.dataEntry.dueDate.toISOString().split('T')[0],
-        category: bill.dataEntry.category,
-        lineItems: bill.dataEntry.lineItems,
-      });
-    } else {
-      setFormData({
-        vendor: '',
-        invoiceNumber: '',
-        invoiceDate: '',
-        dueDate: '',
-        category: '',
-        lineItems: [],
-      });
-    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedBill) return;
+  const handleSubmitForDataApproval = async (bill: Bill) => {
+    if (!user) return;
 
     try {
-      const dataEntry: BillDataEntry = {
-        id: Math.random().toString(36).substr(2, 9),
-        billId: selectedBill.id,
-        vendor: formData.vendor,
-        invoiceNumber: formData.invoiceNumber,
-        invoiceDate: new Date(formData.invoiceDate),
-        dueDate: new Date(formData.dueDate),
-        category: formData.category,
-        lineItems: formData.lineItems,
-        enteredBy: user.id,
-        enteredAt: new Date(),
-      };
-
+      console.log('📤 Submitting bill for data approval:', bill.id);
+      
       const updatedBill: Bill = {
-        ...selectedBill,
+        ...bill,
         status: BillStatus.DATA_ENTRY_COMPLETED,
-        dataEntry,
         auditTrail: [
-          ...selectedBill.auditTrail,
+          ...(bill.auditTrail || []),
           createAuditEntry(
-            'Data Entry Completed',
+            'Submitted for data approval',
             user.id,
-            `Data entry completed for bill "${selectedBill.title}"`,
-            selectedBill.status,
+            `Bill submitted for data approval by ${user.username}`,
+            bill.status,
             BillStatus.DATA_ENTRY_COMPLETED
           ),
         ],
       };
 
-      // Make API call to update bill in backend
-      console.log('Sending bill update to backend:', updatedBill);
-      
-      // Send only the necessary fields to avoid issues with complex nested objects
-      const updatePayload = {
-        status: BillStatus.DATA_ENTRY_COMPLETED,
-        dataEntry: {
-          id: dataEntry.id,
-          billId: dataEntry.billId,
-          vendor: dataEntry.vendor,
-          invoiceNumber: dataEntry.invoiceNumber,
-          invoiceDate: dataEntry.invoiceDate.toISOString(),
-          dueDate: dataEntry.dueDate.toISOString(),
-          category: dataEntry.category,
-          lineItems: dataEntry.lineItems,
-          enteredBy: dataEntry.enteredBy,
-          enteredAt: dataEntry.enteredAt.toISOString()
-        }
-      };
-      
-      console.log('Update payload:', updatePayload);
-      
-      const response = await fetch(`http://localhost:5000/api/bills/${selectedBill.id}`, {
+      // Send the bill update to the backend
+      const response = await fetch(`http://localhost:5000/api/bills/${bill.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updatePayload),
+        body: JSON.stringify({
+          status: BillStatus.DATA_ENTRY_COMPLETED,
+          auditTrail: updatedBill.auditTrail,
+        }),
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response body:', errorText);
-        throw new Error(`Failed to update bill: ${response.status} ${response.statusText} - ${errorText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const updatedBillFromServer = await response.json();
-      console.log('Bill data entry completed successfully:', updatedBillFromServer);
+      console.log('✅ Bill submitted for data approval successfully:', updatedBillFromServer);
 
-      // Update local state with the updated bill
+      // Update local state
       dispatch({ type: 'UPDATE_BILL', payload: updatedBill });
       
-      // Refresh bills from backend to ensure we have latest data
+      // Refresh bills from backend
       await refreshBills();
       
+      // Clear selection
       setSelectedBill(null);
-      setFormData({
-        vendor: '',
-        invoiceNumber: '',
-        invoiceDate: '',
-        dueDate: '',
-        category: '',
-        lineItems: [],
-      });
 
     } catch (error) {
-      console.error('Error saving data entry:', error);
-      // You might want to show an error message to the user here
-      alert(`Error saving data entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('❌ Error submitting bill for data approval:', error);
+      alert(`Error submitting bill: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -230,8 +121,6 @@ export default function DataEntry() {
       <Navigation />
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">Data Entry</h1>
-
           {billsForDataEntry.length === 0 ? (
             <div className="text-center py-12">
               <h3 className="text-lg font-medium text-gray-900">No bills for data entry</h3>
@@ -375,162 +264,23 @@ export default function DataEntry() {
                           )}
                         </div>
                       </div>
-                    </div>
-
-                    {/* Data Entry Form */}
-                    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md">
-                      <h2 className="text-xl font-semibold text-gray-900 mb-6">
-                        Data Entry Form
-                      </h2>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Vendor</label>
-                        <input
-                          type="text"
-                          value={formData.vendor}
-                          onChange={(e) => setFormData(prev => ({ ...prev, vendor: e.target.value }))}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 bg-white"
-                          // required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Invoice Number</label>
-                        <input
-                          type="text"
-                          value={formData.invoiceNumber}
-                          onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 bg-white"
-                          // required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Invoice Date</label>
-                        <input
-                          type="date"
-                          value={formData.invoiceDate}
-                          onChange={(e) => setFormData(prev => ({ ...prev, invoiceDate: e.target.value }))}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 bg-white"
-                          // required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Due Date</label>
-                        <input
-                          type="date"
-                          value={formData.dueDate}
-                          onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 bg-white"
-                          // required
-                        />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700">Category</label>
-                        <select
-                          value={formData.category}
-                          onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 bg-white"
-                          // required
-                        >
-                          <option value="">Select category</option>
-                          <option value="Office Supplies">Office Supplies</option>
-                          <option value="Travel">Travel</option>
-                          <option value="Utilities">Utilities</option>
-                          <option value="Marketing">Marketing</option>
-                          <option value="Software">Software</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Line Items */}
-                    <div className="mb-6">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-medium text-gray-900">Line Items</h3>
-                        <button
-                          type="button"
-                          onClick={addLineItem}
-                          className="bg-blue-600 text-white px-3 py-1 rounded-md text-sm hover:bg-blue-700"
-                        >
-                          Add Item
-                        </button>
-                      </div>
-
-                      {formData.lineItems.map((item, index) => (
-                        <div key={item.id} className="grid grid-cols-12 gap-2 mb-2">
-                          <div className="col-span-5">
-                            <input
-                              type="text"
-                              placeholder="Description"
-                              value={item.description}
-                              onChange={(e) => updateLineItem(index, 'description', e.target.value)}
-                              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm text-gray-900 bg-white"
-                            />
-                          </div>
-                          <div className="col-span-2">
-                            <input
-                              type="number"
-                              placeholder="Qty"
-                              value={item.quantity}
-                              onChange={(e) => updateLineItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm text-gray-900 bg-white"
-                            />
-                          </div>
-                          <div className="col-span-2">
-                            <input
-                              type="number"
-                              step="0.01"
-                              placeholder="Unit Price"
-                              value={item.unitPrice}
-                              onChange={(e) => updateLineItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm text-gray-900 bg-white"
-                            />
-                          </div>
-                          <div className="col-span-2">
-                            <input
-                              type="text"
-                              value={`$${item.total.toFixed(2)}`}
-                              readOnly
-                              className="w-full rounded-md border-gray-300 bg-gray-50 text-sm text-gray-900"
-                            />
-                          </div>
-                          <div className="col-span-1">
-                            <button
-                              type="button"
-                              onClick={() => removeLineItem(index)}
-                              className="w-full bg-red-600 text-white rounded-md text-sm hover:bg-red-700"
-                            >
-                              ×
-                            </button>
-                          </div>
+                      
+                      {/* Action Button */}
+                      <div className="border-t pt-6">
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => handleSubmitForDataApproval(selectedBill)}
+                            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                            Submit for Data Approval
+                          </button>
                         </div>
-                      ))}
-
-                      {formData.lineItems.length === 0 && (
-                        <p className="text-gray-500 text-sm">No line items added yet.</p>
-                      )}
+                      </div>
                     </div>
 
-                      <div className="flex justify-end space-x-4">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedBill(null)}
-                          className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
-                        >
-                          Save Data Entry
-                        </button>
-                      </div>
-                    </form>
                   </div>
                 ) : (
                   <div className="bg-white p-6 rounded-lg shadow-md text-center">
