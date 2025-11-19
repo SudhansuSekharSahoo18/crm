@@ -1,0 +1,55 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   // ADMIN, SUBMITTER, APPROVER, DATA_ENTRY, DATA_APPROVER, VERIFIER
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Bill {
+  id          String      @id @default(cuid())
+  title       String
+  description String
+  amount      Float
+  fileName    String
+  fileUrl     String
+  status      String      // SUBMITTED, APPROVED, REJECTED, DATA_ENTRY, DATA_APPROVED, VERIFIED
+  submittedBy String
+  submittedAt DateTime    @default(now())
+  auditTrail  AuditTrail[]
+}
+
+model Firm {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  gstNumber String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditTrail {
+  id        String   @id @default(cuid())
+  action    String
+  userId    String
+  timestamp DateTime @default(now())
+  billId    String
+  bill      Bill     @relation(fields: [billId], references: [id])
+}
+
+// Enum values as constants (SQLite doesn't support enums):
+// UserRole: ADMIN, SUBMITTER, APPROVER, DATA_ENTRY, DATA_APPROVER, VERIFIER
+// BillStatus: SUBMITTED, APPROVED, REJECTED, DATA_ENTRY, DATA_APPROVED, VERIFIED
