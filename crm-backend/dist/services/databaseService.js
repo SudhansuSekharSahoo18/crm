@@ -74,6 +74,8 @@ class DatabaseService {
         status TEXT NOT NULL DEFAULT 'SUBMITTED',
         submittedBy TEXT NOT NULL,
         submittedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        items TEXT,
+        auditTrail TEXT,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -84,6 +86,24 @@ class DatabaseService {
             }
             else {
                 console.log('Bills table ready');
+                // Add items column if it doesn't exist (for existing databases)
+                this.db.run('ALTER TABLE bills ADD COLUMN items TEXT', (alterErr) => {
+                    if (alterErr && !alterErr.message.includes('duplicate column')) {
+                        console.error('Error adding items column:', alterErr.message);
+                    }
+                    else {
+                        console.log('Items column ready');
+                    }
+                });
+                // Add auditTrail column if it doesn't exist (for existing databases)
+                this.db.run('ALTER TABLE bills ADD COLUMN auditTrail TEXT', (alterErr) => {
+                    if (alterErr && !alterErr.message.includes('duplicate column')) {
+                        console.error('Error adding auditTrail column:', alterErr.message);
+                    }
+                    else {
+                        console.log('AuditTrail column ready');
+                    }
+                });
             }
         });
     }
@@ -196,8 +216,18 @@ class DatabaseService {
     // Bill operations
     createBill(billData) {
         return new Promise((resolve, reject) => {
-            const sql = `INSERT INTO bills (id, title, description, amount, fileName, fileUrl, transportFileName, transportFileUrl, status, submittedBy, submittedAt) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            const sql = `INSERT INTO bills (id, title, description, amount, fileName, fileUrl, transportFileName, transportFileUrl, status, submittedBy, submittedAt, items, auditTrail) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            // Initialize auditTrail with the submission entry
+            const initialAuditTrail = [{
+                    id: Date.now().toString(),
+                    action: 'Bill submitted',
+                    performedBy: billData.submittedBy,
+                    performedAt: new Date().toISOString(),
+                    details: `Bill submitted by ${billData.submittedBy}`,
+                    previousStatus: null,
+                    newStatus: billData.status || 'SUBMITTED'
+                }];
             const params = [
                 billData.id,
                 billData.title,
@@ -209,7 +239,9 @@ class DatabaseService {
                 billData.transportFileUrl || null,
                 billData.status,
                 billData.submittedBy,
-                billData.submittedAt
+                billData.submittedAt,
+                billData.items ? JSON.stringify(billData.items) : null,
+                JSON.stringify(billData.auditTrail || initialAuditTrail)
             ];
             this.db.run(sql, params, function (err) {
                 if (err) {
@@ -233,7 +265,13 @@ class DatabaseService {
                     reject(err);
                 }
                 else {
-                    resolve(rows);
+                    // Parse items JSON for each bill
+                    const parsedRows = rows.map((row) => ({
+                        ...row,
+                        items: row.items ? JSON.parse(row.items) : [],
+                        auditTrail: row.auditTrail ? JSON.parse(row.auditTrail) : []
+                    }));
+                    resolve(parsedRows);
                 }
             });
         });
@@ -246,6 +284,11 @@ class DatabaseService {
                     reject(err);
                 }
                 else {
+                    if (row) {
+                        // Parse items and auditTrail JSON
+                        row.items = row.items ? JSON.parse(row.items) : [];
+                        row.auditTrail = row.auditTrail ? JSON.parse(row.auditTrail) : [];
+                    }
                     resolve(row);
                 }
             });
@@ -287,6 +330,14 @@ class DatabaseService {
             if (updates.status !== undefined) {
                 fields.push('status = ?');
                 values.push(updates.status);
+            }
+            if (updates.items !== undefined) {
+                fields.push('items = ?');
+                values.push(JSON.stringify(updates.items));
+            }
+            if (updates.auditTrail !== undefined) {
+                fields.push('auditTrail = ?');
+                values.push(JSON.stringify(updates.auditTrail));
             }
             // Always update the updatedAt field
             fields.push('updatedAt = CURRENT_TIMESTAMP');

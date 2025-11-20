@@ -7,6 +7,7 @@ const express_1 = require("express");
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
+const ocrService_1 = require("../services/ocrService");
 const router = (0, express_1.Router)();
 // Configure multer for file upload
 const storage = multer_1.default.diskStorage({
@@ -66,16 +67,41 @@ router.post('/upload', upload.single('file'), (req, res) => {
 router.post('/upload-multiple', upload.fields([
     { name: 'billFile', maxCount: 1 },
     { name: 'transportFile', maxCount: 1 }
-]), (req, res) => {
+]), async (req, res) => {
     try {
         const files = req.files;
         const result = {};
         if (files.billFile && files.billFile[0]) {
             const billFile = files.billFile[0];
+            const fileUrl = `http://localhost:5000/uploads/bills/${billFile.filename}`;
+            const filePath = billFile.path;
             result.billFile = {
                 fileName: billFile.originalname,
-                fileUrl: `http://localhost:5000/uploads/bills/${billFile.filename}`
+                fileUrl: fileUrl
             };
+            // Extract GST number from bill image if it's an image file
+            if (ocrService_1.ocrService.isImageFile(billFile.originalname)) {
+                try {
+                    console.log(`🔍 Extracting GST number from bill document: ${billFile.originalname}`);
+                    const gstNumber = await ocrService_1.ocrService.extractGSTFromImage(filePath);
+                    result.billFile.gstNumber = gstNumber;
+                    if (gstNumber) {
+                        console.log(`✅ GST number extraction successful for ${billFile.originalname}: ${gstNumber}`);
+                    }
+                    else {
+                        console.log(`⚠️ No GST number found in ${billFile.originalname}`);
+                    }
+                }
+                catch (ocrError) {
+                    console.error(`⚠️ GST extraction failed for ${billFile.originalname}:`, ocrError);
+                    result.billFile.gstNumber = null;
+                    result.billFile.gstExtractionError = 'GST number extraction failed';
+                }
+            }
+            else {
+                console.log(`📄 File ${billFile.originalname} is not an image, skipping GST extraction`);
+                result.billFile.gstNumber = null;
+            }
         }
         if (files.transportFile && files.transportFile[0]) {
             const transportFile = files.transportFile[0];
@@ -87,6 +113,7 @@ router.post('/upload-multiple', upload.fields([
         res.status(200).json({
             success: true,
             files: result,
+            gstNumber: result.billFile?.gstNumber || null,
             message: 'Files uploaded successfully'
         });
     }

@@ -17,6 +17,7 @@ export enum BillStatus {
   DATA_APPROVED = 'data_approved',
   DATA_REJECTED = 'data_rejected',
   VERIFIED = 'verified',
+  VERIFICATION_COMPLETED = 'verification_completed',
   FINAL_APPROVED = 'final_approved',
   FINAL_REJECTED = 'final_rejected'
 }
