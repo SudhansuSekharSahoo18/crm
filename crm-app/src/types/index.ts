@@ -1,10 +1,10 @@
 export enum UserRole {
-  ADMIN = 'admin',
-  SUBMITTER = 'submitter',
-  APPROVER = 'approver',
-  DATA_ENTRY = 'data_entry',
-  DATA_APPROVER = 'data_approver',
-  VERIFIER = 'verifier'
+  ADMIN = 'ADMIN',
+  SUBMITTER = 'SUBMITTER',
+  APPROVER = 'APPROVER',
+  DATA_ENTRY = 'DATA_ENTRY',
+  DATA_APPROVER = 'DATA_APPROVER',
+  VERIFIER = 'VERIFIER'
 }
 
 export enum BillStatus {
@@ -26,6 +26,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  password?: string; // Optional for security - not always included in responses
   roles: UserRole[];
   createdAt: Date;
   createdBy: string;

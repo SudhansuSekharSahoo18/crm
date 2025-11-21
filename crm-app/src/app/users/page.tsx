@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useApp, hasRole } from '@/context/AppContext';
 import Navigation from '@/components/Navigation';
@@ -11,11 +11,56 @@ export default function UserManagement() {
   const { state, dispatch } = useApp();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     username: '',
     email: '',
+    password: '',
     roles: [] as UserRole[],
   });
+
+  // Load users from API when component mounts
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const apiBaseUrl = 'http://localhost:5000';
+        const response = await fetch(`${apiBaseUrl}/api/users`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${user?.id}`,
+          },
+        });
+
+        if (response.ok) {
+          const users = await response.json();
+          // Transform backend users to frontend format
+          const transformedUsers: User[] = users.map((dbUser: any) => ({
+            id: dbUser.id.toString(),
+            username: dbUser.name || dbUser.username || dbUser.email,
+            email: dbUser.email,
+            roles: Array.isArray(dbUser.roles) ? dbUser.roles.map((r: string) => r as UserRole) : [dbUser.role as UserRole || UserRole.SUBMITTER],
+            createdAt: new Date(dbUser.createdAt || new Date()),
+            createdBy: 'system',
+          }));
+          dispatch({ type: 'LOAD_INITIAL_DATA', payload: { users: transformedUsers, bills: state.bills, firms: state.firms } });
+        } else {
+          console.log('Failed to load users:', response.statusText);
+          // Continue with empty users list if fetch fails
+        }
+      } catch (error) {
+        console.error('Error loading users:', error);
+        // Continue with empty users list if fetch fails
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user && hasRole(user, UserRole.ADMIN)) {
+      loadUsers();
+    } else {
+      setLoading(false);
+    }
+  }, [user, dispatch, state.bills, state.firms]);
 
   if (!user || !hasRole(user, UserRole.ADMIN)) {
     return (
@@ -35,53 +80,140 @@ export default function UserManagement() {
     setFormData({
       username: '',
       email: '',
+      password: '',
       roles: [],
     });
     setEditingUser(null);
     setShowCreateForm(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (editingUser) {
-      // Update existing user
-      const updatedUser: User = {
-        ...editingUser,
-        username: formData.username,
-        email: formData.email,
-        roles: formData.roles,
-      };
-      dispatch({ type: 'UPDATE_USER', payload: updatedUser });
-    } else {
-      // Create new user
-      const newUser: User = {
-        id: Math.random().toString(36).substr(2, 9),
-        username: formData.username,
-        email: formData.email,
-        roles: formData.roles,
-        createdAt: new Date(),
-        createdBy: user.id,
-      };
-      dispatch({ type: 'ADD_USER', payload: newUser });
+    try {
+      const apiBaseUrl = 'http://localhost:5000';
+      
+      if (editingUser) {
+        // Update existing user
+        const updateData: any = {
+          name: formData.username, // Backend expects 'name' field
+          email: formData.email,
+          roles: [...new Set(formData.roles)], // Remove duplicates, roles already uppercase from enum
+        };
+        
+        // Only include password if it's provided
+        if (formData.password) {
+          updateData.password = formData.password;
+        }
+
+        const response = await fetch(`${apiBaseUrl}/api/users/${editingUser.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${user.id}`, // Simple auth for now
+          },
+          body: JSON.stringify(updateData),
+        });
+
+        console.log('Update user request:', {
+          url: `${apiBaseUrl}/api/users/${editingUser.id}`,
+          method: 'PUT',
+          body: updateData
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.log('Update user error response:', errorText);
+          throw new Error(`Failed to update user: ${response.statusText} - ${errorText}`);
+        }
+
+        const updatedUser = await response.json();
+        dispatch({ type: 'UPDATE_USER', payload: { ...editingUser, ...updateData } });
+      } else {
+        // Create new user
+        const newUserData = {
+          name: formData.username, // Backend expects 'name' field
+          email: formData.email,
+          password: formData.password,
+          roles: formData.roles.length > 0 ? formData.roles : [UserRole.SUBMITTER], // Send roles array
+        };
+
+        const response = await fetch(`${apiBaseUrl}/api/users/register`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(newUserData),
+        });
+
+        console.log('Create user response status:', response.status);
+        console.log('Create user response URL:', `${apiBaseUrl}/api/users/register`);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.log('Create user error response:', errorText);
+          throw new Error(`Failed to create user: ${response.statusText} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        const newUser: User = {
+          id: result.user.id.toString(),
+          username: result.user.name || formData.username,
+          email: result.user.email,
+          roles: Array.isArray(result.user.roles) 
+            ? result.user.roles.map((r: string) => r as UserRole) 
+            : (result.user.role ? [result.user.role as UserRole] : formData.roles),
+          createdAt: new Date(result.user.createdAt || new Date()),
+          createdBy: user.id,
+        };
+        dispatch({ type: 'ADD_USER', payload: newUser });
+      }
+      
+      alert(`User ${editingUser ? 'updated' : 'created'} successfully!`);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving user:', error);
+      alert(`Failed to ${editingUser ? 'update' : 'create'} user. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    
-    resetForm();
   };
 
   const handleEdit = (userToEdit: User) => {
+    console.log('Editing user:', userToEdit);
+    console.log('User roles:', userToEdit.roles);
+    
     setEditingUser(userToEdit);
     setFormData({
       username: userToEdit.username,
       email: userToEdit.email,
+      password: '', // Don't pre-fill password for security
       roles: userToEdit.roles,
     });
+    console.log('Form data set with roles:', userToEdit.roles);
     setShowCreateForm(true);
   };
 
-  const handleDelete = (userId: string) => {
+  const handleDelete = async (userId: string) => {
     if (confirm('Are you sure you want to delete this user?')) {
-      dispatch({ type: 'DELETE_USER', payload: userId });
+      try {
+        const apiBaseUrl = 'http://localhost:5000';
+        
+        const response = await fetch(`${apiBaseUrl}/api/users/${userId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${user.id}`, // Simple auth for now
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to delete user: ${response.statusText}`);
+        }
+
+        dispatch({ type: 'DELETE_USER', payload: userId });
+        alert('User deleted successfully!');
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        alert(`Failed to delete user. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     }
   };
 
@@ -95,7 +227,7 @@ export default function UserManagement() {
   };
 
   const getRoleDisplayName = (role: UserRole) => {
-    return role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+    return role.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
   };
 
   const getRoleColor = (role: UserRole) => {
@@ -140,7 +272,7 @@ export default function UserManagement() {
                       type="text"
                       value={formData.username}
                       onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 bg-white"
                       required
                     />
                   </div>
@@ -151,27 +283,43 @@ export default function UserManagement() {
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 bg-white"
                       required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Password</label>
+                    <input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 bg-white"
+                      required={!editingUser}
+                      placeholder={editingUser ? "Leave blank to keep current password" : ""}
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Roles</label>
                     <div className="space-y-2">
-                      {Object.values(UserRole).map((role) => (
-                        <label key={role} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={formData.roles.includes(role)}
-                            onChange={() => handleRoleToggle(role)}
-                            className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                          />
-                          <span className="ml-2 text-sm text-gray-900">
-                            {getRoleDisplayName(role)}
-                          </span>
-                        </label>
-                      ))}
+                      {Object.values(UserRole).map((role) => {
+                        const isChecked = formData.roles.includes(role);
+                        console.log(`Role ${role} checked:`, isChecked, 'Current roles:', formData.roles);
+                        return (
+                          <label key={role} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleRoleToggle(role)}
+                              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                            />
+                            <span className="ml-2 text-sm text-gray-900">
+                              {getRoleDisplayName(role)}
+                            </span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -198,7 +346,14 @@ export default function UserManagement() {
           {/* Users List */}
           <div className="bg-white shadow overflow-hidden sm:rounded-md">
             <ul className="divide-y divide-gray-200">
-              {state.users.map((userItem) => (
+              {loading ? (
+                <li>
+                  <div className="px-4 py-8 text-center">
+                    <p className="text-gray-500">Loading users...</p>
+                  </div>
+                </li>
+              ) : (
+                state.users.map((userItem) => (
                 <li key={userItem.id}>
                   <div className="px-4 py-4 sm:px-6">
                     <div className="flex items-center justify-between">
@@ -246,8 +401,9 @@ export default function UserManagement() {
                     </div>
                   </div>
                 </li>
-              ))}
-              {state.users.length === 0 && (
+              ))
+              )}
+              {!loading && state.users.length === 0 && (
                 <li>
                   <div className="px-4 py-8 text-center">
                     <p className="text-gray-500">No users found</p>

@@ -47,10 +47,54 @@ class DatabaseService {
         name TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
         password TEXT NOT NULL,
-        role TEXT NOT NULL,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
+    `;
+
+    // Create user_roles table for many-to-many relationship
+    const createUserRolesTable = `
+      CREATE TABLE IF NOT EXISTS user_roles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER NOT NULL,
+        role TEXT NOT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(userId, role)
+      )
+    `;
+
+    // Migration queries to handle existing data
+    const migrateExistingRoles = `
+      INSERT OR IGNORE INTO user_roles (userId, role)
+      SELECT id, 
+        CASE 
+          WHEN roles IS NOT NULL AND roles != '' THEN
+            json_extract(roles, '$[0]')
+          WHEN role IS NOT NULL THEN role
+          ELSE 'SUBMITTER'
+        END
+      FROM users
+      WHERE id NOT IN (SELECT DISTINCT userId FROM user_roles)
+    `;
+
+    // Drop the old role and roles columns after migration
+    const dropOldRoleColumns = `
+      CREATE TABLE users_temp (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        password TEXT NOT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO users_temp (id, name, email, password, createdAt, updatedAt)
+      SELECT id, name, email, password, 
+             COALESCE(createdAt, CURRENT_TIMESTAMP) as createdAt,
+             COALESCE(updatedAt, CURRENT_TIMESTAMP) as updatedAt
+      FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_temp RENAME TO users;
     `;
 
     this.db.run(createUsersTable, (err) => {
@@ -58,6 +102,18 @@ class DatabaseService {
         console.error('Error creating users table:', err.message);
       } else {
         console.log('Users table ready');
+        
+        // Create user_roles table
+        this.db.run(createUserRolesTable, (rolesErr) => {
+          if (rolesErr) {
+            console.error('Error creating user_roles table:', rolesErr.message);
+          } else {
+            console.log('User_roles table ready');
+            
+            // Skip role migration since we've already handled the schema change
+            console.log('User roles migration completed (skipped - already done)');
+          }
+        });
       }
     });
 
@@ -181,20 +237,45 @@ class DatabaseService {
   }
 
   // User operations
-  createUser(name: string, email: string, password: string, role: string): Promise<any> {
+  createUser(name: string, email: string, password: string, roles: string[]): Promise<any> {
     return new Promise((resolve, reject) => {
-      const sql = `INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`;
-      this.db.run(sql, [name, email, password, role], function(err) {
+      const userSql = `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`;
+      this.db.run(userSql, [name, email, password], (err) => {
         if (err) {
           reject(err);
         } else {
-          resolve({
-            id: this.lastID,
-            name,
-            email,
-            role,
-            createdAt: new Date(),
-            updatedAt: new Date()
+          // Get the last inserted ID
+          this.db.get('SELECT last_insert_rowid() as id', [], (idErr: any, row: any) => {
+            if (idErr) {
+              reject(idErr);
+            } else {
+              const userId = row.id;
+              const rolePromises = roles.map(role => {
+                return new Promise((roleResolve, roleReject) => {
+                  const roleSql = `INSERT INTO user_roles (userId, role) VALUES (?, ?)`;
+                  this.db.run(roleSql, [userId, role], (roleErr: any) => {
+                    if (roleErr) {
+                      roleReject(roleErr);
+                    } else {
+                      roleResolve(role);
+                    }
+                  });
+                });
+              });
+              
+              Promise.all(rolePromises)
+                .then(() => {
+                  resolve({
+                    id: userId,
+                    name,
+                    email,
+                    roles: roles,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                  });
+                })
+                .catch(reject);
+            }
           });
         }
       });
@@ -203,12 +284,186 @@ class DatabaseService {
 
   getUserByEmail(email: string): Promise<any> {
     return new Promise((resolve, reject) => {
-      const sql = `SELECT * FROM users WHERE email = ?`;
-      this.db.get(sql, [email], (err, row) => {
+      const sql = `
+        SELECT u.*, GROUP_CONCAT(ur.role) as roles
+        FROM users u
+        LEFT JOIN user_roles ur ON u.id = ur.userId
+        WHERE u.email = ?
+        GROUP BY u.id
+      `;
+      this.db.get(sql, [email], (err, row: any) => {
         if (err) {
           reject(err);
         } else {
+          if (row) {
+            row.roles = row.roles ? row.roles.split(',') : ['SUBMITTER'];
+          }
           resolve(row);
+        }
+      });
+    });
+  }
+
+  getAllUsers(): Promise<any[]> {
+    return new Promise((resolve, reject) => {
+      const sql = `
+        SELECT u.id, u.name, u.email, u.createdAt, u.updatedAt,
+               GROUP_CONCAT(ur.role) as roles
+        FROM users u
+        LEFT JOIN user_roles ur ON u.id = ur.userId
+        GROUP BY u.id, u.name, u.email, u.createdAt, u.updatedAt
+        ORDER BY u.createdAt DESC
+      `;
+      this.db.all(sql, [], (err, rows: any[]) => {
+        if (err) {
+          reject(err);
+        } else {
+          const usersWithParsedRoles = rows.map(row => ({
+            ...row,
+            roles: row.roles ? row.roles.split(',') : ['SUBMITTER']
+          }));
+          resolve(usersWithParsedRoles);
+        }
+      });
+    });
+  }
+
+  getUserById(id: number): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const sql = `
+        SELECT u.*, GROUP_CONCAT(ur.role) as roles
+        FROM users u
+        LEFT JOIN user_roles ur ON u.id = ur.userId
+        WHERE u.id = ?
+        GROUP BY u.id
+      `;
+      this.db.get(sql, [id], (err, row: any) => {
+        if (err) {
+          reject(err);
+        } else {
+          if (row) {
+            row.roles = row.roles ? row.roles.split(',') : ['SUBMITTER'];
+          }
+          resolve(row);
+        }
+      });
+    });
+  }
+
+  updateUser(id: number, userData: Partial<{ name: string; email: string; password?: string; roles: string[] }>): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const updates = [];
+      const values = [];
+      
+      if (userData.name) {
+        updates.push('name = ?');
+        values.push(userData.name);
+      }
+      if (userData.email) {
+        updates.push('email = ?');
+        values.push(userData.email);
+      }
+      if (userData.password) {
+        updates.push('password = ?');
+        values.push(userData.password);
+      }
+      
+      updates.push('updatedAt = ?');
+      values.push(new Date().toISOString());
+      values.push(id);
+
+      const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
+      
+      this.db.run(sql, values, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          // Update roles if provided
+          if (userData.roles) {
+            // Use a transaction to ensure atomicity
+            this.db.serialize(() => {
+              this.db.run('BEGIN TRANSACTION', (beginErr) => {
+                if (beginErr) {
+                  reject(beginErr);
+                  return;
+                }
+                
+                // Delete existing roles
+                this.db.run('DELETE FROM user_roles WHERE userId = ?', [id], (deleteErr) => {
+                  if (deleteErr) {
+                    this.db.run('ROLLBACK');
+                    reject(deleteErr);
+                    return;
+                  }
+                  
+                  // Insert new roles one by one to avoid conflicts
+                  let insertCount = 0;
+                  const totalRoles = userData.roles!.length;
+                  
+                  if (totalRoles === 0) {
+                    this.db.run('COMMIT', (commitErr) => {
+                      if (commitErr) {
+                        reject(commitErr);
+                      } else {
+                        resolve({ id, ...userData, updatedAt: new Date() });
+                      }
+                    });
+                    return;
+                  }
+                  
+                  userData.roles!.forEach(role => {
+                    const roleSql = `INSERT INTO user_roles (userId, role) VALUES (?, ?)`;
+                    this.db.run(roleSql, [id, role], (roleErr) => {
+                      if (roleErr) {
+                        this.db.run('ROLLBACK');
+                        reject(roleErr);
+                        return;
+                      }
+                      
+                      insertCount++;
+                      if (insertCount === totalRoles) {
+                        this.db.run('COMMIT', (commitErr) => {
+                          if (commitErr) {
+                            reject(commitErr);
+                          } else {
+                            resolve({ id, ...userData, updatedAt: new Date() });
+                          }
+                        });
+                      }
+                    });
+                  });
+                });
+              });
+            });
+          } else {
+            resolve({ id, ...userData, updatedAt: new Date() });
+          }
+        }
+      });
+    });
+  }
+
+  deleteUser(id: number): Promise<any> {
+    return new Promise((resolve, reject) => {
+      // Delete user roles first (though CASCADE should handle this)
+      const deleteRolesSql = `DELETE FROM user_roles WHERE userId = ?`;
+      this.db.run(deleteRolesSql, [id], (rolesErr) => {
+        if (rolesErr) {
+          reject(rolesErr);
+        } else {
+          // Delete user
+          const deleteUserSql = `DELETE FROM users WHERE id = ?`;
+          this.db.run(deleteUserSql, [id], function(err) {
+            if (err) {
+              reject(err);
+            } else {
+              if (this.changes === 0) {
+                reject(new Error('User not found'));
+              } else {
+                resolve({ id, message: 'User deleted successfully' });
+              }
+            }
+          });
         }
       });
     });
@@ -391,6 +646,23 @@ class DatabaseService {
       } else {
         console.log('Database connection closed');
       }
+    });
+  }
+
+  // Password migration helper
+  updateUserPassword(userId: number, hashedPassword: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'UPDATE users SET password = ? WHERE id = ?',
+        [hashedPassword, userId],
+        (err: any) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        }
+      );
     });
   }
 }

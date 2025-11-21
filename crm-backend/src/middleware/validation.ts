@@ -15,6 +15,24 @@ export const validateRegistration = [
   },
 ];
 
+export const validateUser = [
+  body('email').optional().isEmail().withMessage('Valid email is required'),
+  body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('name').optional().notEmpty().withMessage('Name is required'),
+  body('username').optional().notEmpty().withMessage('Username is required'),
+  body('roles').optional().isArray().withMessage('Roles must be an array'),
+  body('roles.*').optional().isIn(['ADMIN', 'SUBMITTER', 'APPROVER', 'DATA_ENTRY', 'DATA_APPROVER', 'VERIFIER']).withMessage('Valid role is required'),
+  body('role').optional().isIn(['ADMIN', 'SUBMITTER', 'APPROVER', 'DATA_ENTRY', 'DATA_APPROVER', 'VERIFIER']).withMessage('Valid role is required'),
+  (req: Request, res: Response, next: NextFunction) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log('Validation errors:', errors.array());
+      return res.status(400).json({ errors: errors.array() });
+    }
+    next();
+  },
+];
+
 export const validateLogin = [
   body('email').isEmail().withMessage('Valid email is required'),
   body('password').notEmpty().withMessage('Password is required'),

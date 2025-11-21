@@ -101,14 +101,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   const login = async (username: string, password: string): Promise<boolean> => {
-    // Simple mock authentication - in a real app, this would call an API
-    const user = MOCK_USERS.find(u => u.username === username);
-    if (user && password === 'password') {
-      dispatch({ type: 'LOGIN_SUCCESS', payload: user });
-      localStorage.setItem('user', JSON.stringify(user));
-      return true;
+    try {
+      const apiBaseUrl = 'http://localhost:5000';
+      
+      // Call backend login API
+      const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: username, password }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Transform backend user to frontend User type
+        const user: User = {
+          id: data.user.id.toString(),
+          username: data.user.name || data.user.email,
+          email: data.user.email,
+          roles: Array.isArray(data.user.roles) ? data.user.roles.map((r: string) => r as UserRole) : [UserRole.SUBMITTER],
+          createdAt: new Date(data.user.createdAt || new Date()),
+          createdBy: 'system',
+        };
+        
+        dispatch({ type: 'LOGIN_SUCCESS', payload: user });
+        localStorage.setItem('user', JSON.stringify(user));
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Login error:', error);
+      return false;
     }
-    return false;
   };
 
   const logout = () => {

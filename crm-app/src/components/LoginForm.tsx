@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginForm() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,9 +16,9 @@ export default function LoginForm() {
     setError('');
 
     try {
-      const success = await login(username, password);
+      const success = await login(email, password);
       if (!success) {
-        setError('Invalid username or password');
+        setError('Invalid email or password');
       }
     } catch (err) {
       setError('Login failed. Please try again.');
@@ -38,29 +38,26 @@ export default function LoginForm() {
             Use the following demo accounts:
           </p>
           <div className="mt-4 text-xs text-gray-500 space-y-1">
-            <p><strong>Admin:</strong> admin / password</p>
-            <p><strong>Submitter:</strong> submitter / password</p>
-            <p><strong>Approver:</strong> approver / password</p>
-            <p><strong>Data Entry:</strong> dataentry / password</p>
-            <p><strong>Data Approver:</strong> dataapprover / password</p>
-            <p><strong>Verifier:</strong> verifier / password</p>
+            <p><strong>Demo Credentials:</strong></p>
+            <p>Use any registered user's email and password</p>
+            <p>You can create users from the Users Management page</p>
           </div>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
-              <label htmlFor="username" className="sr-only">
-                Username
+              <label htmlFor="email" className="sr-only">
+                Email
               </label>
               <input
-                id="username"
-                name="username"
-                type="text"
+                id="email"
+                name="email"
+                type="email"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div>

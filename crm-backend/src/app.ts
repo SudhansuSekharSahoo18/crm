@@ -7,7 +7,7 @@ import { config } from 'dotenv';
 import authRoutes from './routes/auth';
 import billRoutes from './routes/bills';
 import uploadRoutes from './routes/upload';
-// import userRoutes from './routes/users';
+import userRoutes from './routes/users';
 import firmRoutes from './routes/firms';
 // Import database service to initialize it
 import './services/databaseService';
@@ -106,7 +106,7 @@ console.log('📁 Database: SQLite (local file-based database)');
 app.use('/api/auth', authRoutes);
 app.use('/api/bills', billRoutes);
 app.use('/api/upload', uploadRoutes);
-// app.use('/api/users', userRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/firms', firmRoutes);
 
 // Error handling middleware (must be after all routes)

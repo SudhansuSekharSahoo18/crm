@@ -1,8 +1,14 @@
 import { Router } from 'express';
-import { login, register } from '../controllers/authController';
+import { login, register, bootstrap, migratePasswords } from '../controllers/authController';
 import { validateRegistration, validateLogin } from '../middleware/validation';
 
 const router = Router();
+
+// Bootstrap endpoint to create initial admin user
+router.post('/bootstrap', bootstrap);
+
+// Password migration endpoint
+router.post('/migrate-passwords', migratePasswords);
 
 // User registration route
 router.post('/register', validateRegistration, register);
