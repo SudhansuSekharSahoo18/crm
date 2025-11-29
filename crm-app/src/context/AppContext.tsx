@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import { API_ENDPOINTS } from '@/config/api';
 import { User, Bill, Firm, UserRole, BillStatus, AuditEntry, BillDataEntry, AppState } from '@/types';
 
 interface AppContextType {
@@ -154,7 +155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const loadBillsFromBackend = async () => {
       try {
         console.log('🔄 Loading bills from backend API...');
-        const response = await fetch('http://localhost:5000/api/bills');
+        const response = await fetch(API_ENDPOINTS.BILLS);
         if (response.ok) {
           const bills = await response.json();
           console.log('✅ Loaded bills from backend:', bills.length, 'bills');

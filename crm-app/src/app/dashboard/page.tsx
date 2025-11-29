@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/context/AuthContext';
 import { useApp, hasRole } from '@/context/AppContext';
+import { API_ENDPOINTS, getBillEndpoint } from '@/config/api';
 import Navigation from '@/components/Navigation';
 import { UserRole, BillStatus, Firm } from '@/types';
 import Link from 'next/link';
@@ -55,7 +56,7 @@ export default function Dashboard() {
         setFirmsLoadError(null);
         console.log('Starting to fetch firms from backend...');
         
-        const response = await fetch('http://localhost:5000/api/firms');
+        const response = await fetch(API_ENDPOINTS.FIRMS);
         console.log('Fetch response status:', response.status, response.statusText);
 
         if (response.ok) {
@@ -96,7 +97,7 @@ export default function Dashboard() {
 
     const loadBills = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/bills');
+        const response = await fetch(API_ENDPOINTS.BILLS);
 
         if (response.ok) {
           const bills = await response.json();
@@ -316,7 +317,7 @@ export default function Dashboard() {
         dispatch({ type: 'UPDATE_FIRM', payload: updatedFirm });
       } else {
         // Create new firm via API (no authentication required for testing)
-        const response = await fetch('http://localhost:5000/api/firms', {
+        const response = await fetch(API_ENDPOINTS.FIRMS, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -348,7 +349,7 @@ export default function Dashboard() {
         
         // Reload firms from backend to ensure data consistency
         try {
-          const firmsResponse = await fetch('http://localhost:5000/api/firms');
+          const firmsResponse = await fetch(API_ENDPOINTS.FIRMS);
           if (firmsResponse.ok) {
             const firms = await firmsResponse.json();
             const formattedFirms: Firm[] = firms.map((firm: any) => ({
@@ -738,7 +739,7 @@ export default function Dashboard() {
                                     e.stopPropagation();
                                     if (confirm('Are you sure you want to delete this bill?')) {
                                       try {
-                                        const response = await fetch(`http://localhost:5000/api/bills/${bill.id}`, {
+                                        const response = await fetch(getBillEndpoint(bill.id), {
                                           method: 'DELETE',
                                         });
                                         if (response.ok) {
@@ -971,7 +972,7 @@ export default function Dashboard() {
                               setFirmsLoadError(null);
                               console.log('Manual refresh: Starting to fetch firms from backend...');
                               
-                              const response = await fetch('http://localhost:5000/api/firms');
+                              const response = await fetch(API_ENDPOINTS.FIRMS);
                               console.log('Manual refresh: Fetch response status:', response.status, response.statusText);
 
                               if (response.ok) {

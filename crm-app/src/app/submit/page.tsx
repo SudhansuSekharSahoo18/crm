@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { API_ENDPOINTS } from '@/config/api';
 import { useApp, hasRole, createAuditEntry } from '@/context/AppContext';
 import Navigation from '@/components/Navigation';
 import { UserRole, BillStatus, Bill, BillItem } from '@/types';
@@ -85,7 +86,7 @@ export default function SubmitBill() {
         const formDataUpload = new FormData();
         formDataUpload.append('billFile', file);
 
-        const uploadResponse = await fetch('http://localhost:5000/api/upload/upload-multiple', {
+        const uploadResponse = await fetch(API_ENDPOINTS.UPLOAD_MULTIPLE, {
           method: 'POST',
           body: formDataUpload,
         });
@@ -130,7 +131,7 @@ export default function SubmitBill() {
         formDataUpload.append('transportFile', formData.transportFile);
       }
 
-      const uploadResponse = await fetch('http://localhost:5000/api/upload/upload-multiple', {
+      const uploadResponse = await fetch(API_ENDPOINTS.UPLOAD_MULTIPLE, {
         method: 'POST',
         body: formDataUpload,
       });
@@ -188,7 +189,7 @@ export default function SubmitBill() {
       // Save to backend API
       console.log('Submitting bill with items:', newBill);
       try {
-        const response = await fetch('http://localhost:5000/api/bills', {
+        const response = await fetch(API_ENDPOINTS.BILLS, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

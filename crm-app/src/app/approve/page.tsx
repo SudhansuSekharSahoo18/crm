@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { getBillEndpoint } from '@/config/api';
 import { useApp, hasRole, getNextStatus, createAuditEntry } from '@/context/AppContext';
 import Navigation from '@/components/Navigation';
 import { UserRole, BillStatus, Bill } from '@/types';
@@ -76,11 +77,11 @@ export default function ApproveBills() {
       console.log('📤 Sending bill update to backend:', {
         billId: bill.id,
         newStatus: updatedBill.status,
-        apiUrl: `http://localhost:5000/api/bills/${bill.id}`
+        apiUrl: getBillEndpoint(bill.id)
       });
 
       // Make API call to update bill in backend
-      const response = await fetch(`http://localhost:5000/api/bills/${bill.id}`, {
+      const response = await fetch(getBillEndpoint(bill.id), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

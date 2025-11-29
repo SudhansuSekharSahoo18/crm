@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { API_ENDPOINTS } from '@/config/api';
 import { User, UserRole } from '@/types';
 
 interface AuthContextType {
@@ -102,10 +103,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      const apiBaseUrl = 'http://localhost:5000';
-      
       // Call backend login API
-      const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
+      const response = await fetch(API_ENDPOINTS.AUTH_LOGIN, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

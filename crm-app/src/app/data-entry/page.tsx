@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { API_ENDPOINTS, getBillEndpoint } from '@/config/api';
 import { useApp, hasRole, createAuditEntry } from '@/context/AppContext';
 import Navigation from '@/components/Navigation';
 import { UserRole, BillStatus, Bill } from '@/types';
@@ -15,7 +16,7 @@ export default function DataEntry() {
   const refreshBills = async () => {
     try {
       console.log('Refreshing bills from backend...');
-      const response = await fetch('http://localhost:5000/api/bills');
+      const response = await fetch(API_ENDPOINTS.BILLS);
       if (response.ok) {
         const bills = await response.json();
         console.log('Refreshed bills:', bills);
@@ -83,7 +84,7 @@ export default function DataEntry() {
       };
 
       // Send the bill update to the backend
-      const response = await fetch(`http://localhost:5000/api/bills/${bill.id}`, {
+      const response = await fetch(getBillEndpoint(bill.id), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { API_ENDPOINTS, getUserEndpoint } from '@/config/api';
 import { useApp, hasRole } from '@/context/AppContext';
 import Navigation from '@/components/Navigation';
 import { UserRole, User } from '@/types';
@@ -23,8 +24,7 @@ export default function UserManagement() {
   useEffect(() => {
     const loadUsers = async () => {
       try {
-        const apiBaseUrl = 'http://localhost:5000';
-        const response = await fetch(`${apiBaseUrl}/api/users`, {
+        const response = await fetch(API_ENDPOINTS.USERS, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${user?.id}`,
@@ -91,8 +91,6 @@ export default function UserManagement() {
     e.preventDefault();
     
     try {
-      const apiBaseUrl = 'http://localhost:5000';
-      
       if (editingUser) {
         // Update existing user
         const updateData: any = {
@@ -106,7 +104,7 @@ export default function UserManagement() {
           updateData.password = formData.password;
         }
 
-        const response = await fetch(`${apiBaseUrl}/api/users/${editingUser.id}`, {
+        const response = await fetch(getUserEndpoint(editingUser.id), {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -116,7 +114,7 @@ export default function UserManagement() {
         });
 
         console.log('Update user request:', {
-          url: `${apiBaseUrl}/api/users/${editingUser.id}`,
+          url: getUserEndpoint(editingUser.id),
           method: 'PUT',
           body: updateData
         });
@@ -138,7 +136,7 @@ export default function UserManagement() {
           roles: formData.roles.length > 0 ? formData.roles : [UserRole.SUBMITTER], // Send roles array
         };
 
-        const response = await fetch(`${apiBaseUrl}/api/users/register`, {
+        const response = await fetch(API_ENDPOINTS.AUTH_REGISTER, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -147,7 +145,7 @@ export default function UserManagement() {
         });
 
         console.log('Create user response status:', response.status);
-        console.log('Create user response URL:', `${apiBaseUrl}/api/users/register`);
+        console.log('Create user response URL:', API_ENDPOINTS.AUTH_REGISTER);
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -195,9 +193,7 @@ export default function UserManagement() {
   const handleDelete = async (userId: string) => {
     if (confirm('Are you sure you want to delete this user?')) {
       try {
-        const apiBaseUrl = 'http://localhost:5000';
-        
-        const response = await fetch(`${apiBaseUrl}/api/users/${userId}`, {
+        const response = await fetch(getUserEndpoint(userId), {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${user.id}`, // Simple auth for now

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { API_ENDPOINTS, getBillEndpoint } from '@/config/api';
 import { useApp, hasRole, createAuditEntry } from '@/context/AppContext';
 import Navigation from '@/components/Navigation';
 import { UserRole, BillStatus, Bill } from '@/types';
@@ -147,7 +148,7 @@ export default function EditBill() {
         }
 
         try {
-          const uploadResponse = await fetch('http://localhost:5000/api/upload/upload-multiple', {
+          const uploadResponse = await fetch(API_ENDPOINTS.UPLOAD_MULTIPLE, {
             method: 'POST',
             body: formDataUpload,
           });
@@ -197,7 +198,7 @@ export default function EditBill() {
 
       // Save to backend API
       try {
-        const response = await fetch(`http://localhost:5000/api/bills/${billId}`, {
+        const response = await fetch(getBillEndpoint(billId), {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',

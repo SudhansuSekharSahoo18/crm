@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { getBillEndpoint } from '@/config/api';
 import { useApp, hasRole, createAuditEntry } from '@/context/AppContext';
 import Navigation from '@/components/Navigation';
 import { UserRole, BillStatus, Bill } from '@/types';
@@ -48,12 +49,7 @@ export default function DataApproval() {
         auditTrail: [...(bill.auditTrail || []), auditEntry]
       };
 
-      // Make API call to update bill status in backend
-      const apiBaseUrl = 'http://localhost:5000'; // Direct URL for now
-      console.log('API Base URL:', apiBaseUrl);
-      console.log('Full API URL:', `${apiBaseUrl}/api/bills/${bill.id}`);
-      
-      const response = await fetch(`${apiBaseUrl}/api/bills/${bill.id}`, {
+      const response = await fetch(getBillEndpoint(bill.id), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
