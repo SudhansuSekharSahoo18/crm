@@ -44,6 +44,7 @@ export interface Bill {
   id: string;
   title: string;
   description: string;
+  firmId?: string;
   amount: number;
   fileName: string;
   fileUrl: string;

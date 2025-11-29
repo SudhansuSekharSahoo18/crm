@@ -76,7 +76,7 @@ export default function SubmitBill() {
 
     setFormData(prev => ({ ...prev, [field]: file }));
 
-    // If it's the main bill file and it's an image, extract GST number
+    // If it's the main bill file and it's an image, extract GST number using OCR
     if (field === 'file' && file.type.startsWith('image/')) {
       setIsExtractingGST(true);
       try {
@@ -146,6 +146,9 @@ export default function SubmitBill() {
       const billDescription = formData.description.trim();
       console.log('📝 Using manual description for bill');
       
+      // Find the selected firm to get its ID
+      const selectedFirm = state.firms.find(f => f.name === formData.firm);
+      
       // Calculate total amount from items
       const totalAmount = formData.items.reduce((sum, item) => sum + parseFloat(item.mrp || '0'), 0);
       
@@ -161,6 +164,7 @@ export default function SubmitBill() {
         id: Math.random().toString(36).substr(2, 9),
         title: `Bill-${Date.now()}`,
         description: billDescription, // Use OCR extracted text or manual description
+        firmId: selectedFirm?.id,
         amount: totalAmount,
         fileName: uploadResult.files.billFile.fileName,
         fileUrl: uploadResult.files.billFile.fileUrl,
@@ -268,8 +272,6 @@ export default function SubmitBill() {
       <Navigation />
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">Submit New Bill</h1>
-
           <div className="max-w-2xl">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Firm Selection - At the top */}

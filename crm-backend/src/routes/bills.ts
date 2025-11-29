@@ -1,7 +1,25 @@
 import { Router } from 'express';
-import { createBill, getAllBills, updateBill, deleteBill, getBillById } from '../controllers/billController';
+import { createBill, getAllBills, updateBill, deleteBill, getBillById, extractGSTFromImage } from '../controllers/billController';
+import multer from 'multer';
+import path from 'path';
 
 const router = Router();
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/bills/');
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ storage });
+
+// Route to extract GST from image (with file upload)
+router.post('/extract-gst', upload.single('file'), extractGSTFromImage);
 
 // Route to create a new bill
 router.post('/', createBill);

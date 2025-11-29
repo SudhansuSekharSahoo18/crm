@@ -160,6 +160,15 @@ class DatabaseService {
             console.log('AuditTrail column ready');
           }
         });
+
+        // Add firmId column if it doesn't exist (for existing databases)
+        this.db.run('ALTER TABLE bills ADD COLUMN firmId TEXT', (alterErr) => {
+          if (alterErr && !alterErr.message.includes('duplicate column')) {
+            console.error('Error adding firmId column:', alterErr.message);
+          } else {
+            console.log('FirmId column ready');
+          }
+        });
       }
     });
   }
@@ -472,8 +481,8 @@ class DatabaseService {
   // Bill operations
   createBill(billData: any): Promise<any> {
     return new Promise((resolve, reject) => {
-      const sql = `INSERT INTO bills (id, title, description, amount, fileName, fileUrl, transportFileName, transportFileUrl, status, submittedBy, submittedAt, items, auditTrail) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      const sql = `INSERT INTO bills (id, title, description, firmId, amount, fileName, fileUrl, transportFileName, transportFileUrl, status, submittedBy, submittedAt, items, auditTrail) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
       
       // Initialize auditTrail with the submission entry
       const initialAuditTrail = [{
@@ -490,6 +499,7 @@ class DatabaseService {
         billData.id,
         billData.title,
         billData.description,
+        billData.firmId || null,
         billData.amount,
         billData.fileName,
         billData.fileUrl,

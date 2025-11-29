@@ -6,10 +6,12 @@ import Navigation from '@/components/Navigation';
 import { UserRole, BillStatus, Firm } from '@/types';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { state, dispatch } = useApp();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview');
   const [firmForm, setFirmForm] = useState({ name: '', gstNumber: '' });
   const [editingFirm, setEditingFirm] = useState<Firm | null>(null);
@@ -17,6 +19,22 @@ export default function Dashboard() {
   const [isLoadingFirms, setIsLoadingFirms] = useState(false);
   const [firmsLoadError, setFirmsLoadError] = useState<string | null>(null);
   const [billFilter, setBillFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const billsPerPage = 10;
+  const [columnFilters, setColumnFilters] = useState({
+    title: '',
+    firm: '',
+    status: [] as string[],
+    submittedBy: ''
+  });
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+
+  // Redirect to home if not logged in
+  useEffect(() => {
+    if (!user) {
+      router.push('/');
+    }
+  }, [user, router]);
 
   // Debug: Log current state
   useEffect(() => {
@@ -112,6 +130,27 @@ export default function Dashboard() {
     }
   }, [user]);  // Remove dispatch from dependencies to avoid unnecessary re-renders
 
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [billFilter, columnFilters]);
+
+  // Close status dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showStatusDropdown) {
+        const target = event.target as HTMLElement;
+        if (!target.closest('.status-dropdown-container')) {
+          setShowStatusDropdown(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showStatusDropdown]);
+
+  // Early return check after all hooks
   if (!user) {
     return <div>Loading...</div>;
   }
@@ -125,29 +164,69 @@ export default function Dashboard() {
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+    let filtered = bills;
+
+    // Time-based filter
     switch (billFilter) {
       case 'today':
-        return bills.filter(bill => {
+        filtered = bills.filter(bill => {
           const billDate = new Date(bill.submittedAt);
           return billDate >= today;
         });
+        break;
       case 'week':
-        return bills.filter(bill => {
+        filtered = bills.filter(bill => {
           const billDate = new Date(bill.submittedAt);
           return billDate >= weekAgo;
         });
+        break;
       case 'month':
-        return bills.filter(bill => {
+        filtered = bills.filter(bill => {
           const billDate = new Date(bill.submittedAt);
           return billDate >= monthAgo;
         });
-      case 'all':
-      default:
-        return bills;
+        break;
     }
+
+    // Column-based filters
+    if (columnFilters.title) {
+      filtered = filtered.filter(bill => 
+        bill.title.toLowerCase().includes(columnFilters.title.toLowerCase())
+      );
+    }
+
+    if (columnFilters.firm) {
+      filtered = filtered.filter(bill => {
+        const firm = state.firms.find(f => f.id === bill.firmId);
+        const firmName = firm?.name || '-';
+        return firmName.toLowerCase().includes(columnFilters.firm.toLowerCase());
+      });
+    }
+
+    if (columnFilters.status.length > 0) {
+      filtered = filtered.filter(bill => 
+        columnFilters.status.includes(bill.status)
+      );
+    }
+
+    if (columnFilters.submittedBy) {
+      filtered = filtered.filter(bill => {
+        const submitter = state.users.find(u => u.id === bill.submittedBy);
+        const submitterName = submitter?.username || submitter?.email || '';
+        return submitterName.toLowerCase().includes(columnFilters.submittedBy.toLowerCase());
+      });
+    }
+
+    return filtered;
   };
 
   const filteredBills = getFilteredBills();
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredBills.length / billsPerPage);
+  const startIndex = (currentPage - 1) * billsPerPage;
+  const endIndex = startIndex + billsPerPage;
+  const paginatedBills = filteredBills.slice(startIndex, endIndex);
 
   // Get counts for different bill statuses that the user can access
   const getCounts = () => {
@@ -185,68 +264,6 @@ export default function Dashboard() {
   };
 
   const counts = getCounts();
-
-  const getQuickActions = () => {
-    const actions = [];
-
-    if (hasRole(user, UserRole.SUBMITTER) || hasRole(user, UserRole.ADMIN)) {
-      actions.push({
-        title: 'Submit New Bill',
-        description: 'Upload and submit a new bill for approval',
-        href: '/submit',
-        color: 'bg-blue-500 hover:bg-blue-600',
-      });
-    }
-
-    if (hasRole(user, UserRole.APPROVER) || hasRole(user, UserRole.ADMIN)) {
-      actions.push({
-        title: 'Review Bills',
-        description: 'Approve or reject submitted bills',
-        href: '/approve',
-        color: 'bg-green-500 hover:bg-green-600',
-      });
-    }
-
-    if (hasRole(user, UserRole.DATA_ENTRY) || hasRole(user, UserRole.ADMIN)) {
-      actions.push({
-        title: 'Data Entry',
-        description: 'Enter data for approved bills',
-        href: '/data-entry',
-        color: 'bg-yellow-500 hover:bg-yellow-600',
-      });
-    }
-
-    if (hasRole(user, UserRole.DATA_APPROVER) || hasRole(user, UserRole.ADMIN)) {
-      actions.push({
-        title: 'Data Approval',
-        description: 'Review and approve entered data',
-        href: '/data-approval',
-        color: 'bg-purple-500 hover:bg-purple-600',
-      });
-    }
-
-    if (hasRole(user, UserRole.VERIFIER) || hasRole(user, UserRole.ADMIN)) {
-      actions.push({
-        title: 'Verification',
-        description: 'Final verification and approval',
-        href: '/verification',
-        color: 'bg-red-500 hover:bg-red-600',
-      });
-    }
-
-    if (hasRole(user, UserRole.ADMIN)) {
-      actions.push({
-        title: 'User Management',
-        description: 'Manage users and roles',
-        href: '/users',
-        color: 'bg-gray-500 hover:bg-gray-600',
-      });
-    }
-
-    return actions;
-  };
-
-  const quickActions = getQuickActions();
 
   // Firm Management Functions
   const validateFirmForm = () => {
@@ -387,8 +404,8 @@ export default function Dashboard() {
   };
 
   const tabs = [
-    { id: 'overview', name: 'Overview', adminOnly: false },
-    { id: 'firms', name: 'Firms', adminOnly: true },
+    { id: 'overview', name: 'Overview', allowedRoles: [] as UserRole[] },
+    { id: 'firms', name: 'Firms', allowedRoles: [UserRole.ADMIN, UserRole.SUBMITTER] },
   ];
 
   return (
@@ -396,13 +413,11 @@ export default function Dashboard() {
       <Navigation />
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
-
           {/* Tabs */}
           <div className="border-b border-gray-200 mb-8">
             <nav className="-mb-px flex space-x-8">
               {tabs
-                .filter(tab => !tab.adminOnly || hasRole(user, UserRole.ADMIN))
+                .filter(tab => tab.allowedRoles.length === 0 || tab.allowedRoles.some(role => hasRole(user, role)))
                 .map((tab) => (
                   <button
                     key={tab.id}
@@ -535,30 +550,13 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* Quick Actions */}
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Quick Actions</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {quickActions.map((action, index) => (
-                    <Link
-                      key={index}
-                      href={action.href}
-                      className={`${action.color} text-white p-6 rounded-lg shadow-md transition-colors`}
-                    >
-                      <h3 className="text-lg font-semibold mb-2">{action.title}</h3>
-                      <p className="text-sm opacity-90">{action.description}</p>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-
               {/* Recent Activity */}
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Recent Bills</h2>
+                    <h2 className="text-2xl font-bold text-gray-900">All Bills</h2>
                     <p className="text-sm text-gray-600 mt-1">
-                      {filteredBills.length} bill{filteredBills.length !== 1 ? 's' : ''} 
+                      Showing {startIndex + 1}-{Math.min(endIndex, filteredBills.length)} of {filteredBills.length} bill{filteredBills.length !== 1 ? 's' : ''} 
                       {billFilter !== 'all' && ` (${billFilter === 'today' ? 'today' : billFilter === 'week' ? 'this week' : 'this month'})`}
                     </p>
                   </div>
@@ -583,67 +581,315 @@ export default function Dashboard() {
                     ))}
                   </div>
                 </div>
-                <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                  <ul className="divide-y divide-gray-200">
-                    {filteredBills.slice(0, 5).map((bill) => (
-                      <li key={bill.id}>
-                        <Link href={`/bill/${bill.id}`}>
-                          <div className="px-4 py-4 sm:px-6 hover:bg-gray-50 cursor-pointer transition-colors">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center">
-                                <p className="text-sm font-medium text-gray-900 truncate">
-                                  {bill.title}
-                                </p>
-                                <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                  bill.status === BillStatus.FINAL_APPROVED
-                                    ? 'bg-green-100 text-green-800'
-                                    : bill.status === BillStatus.REJECTED || bill.status === BillStatus.FINAL_REJECTED
-                                    ? 'bg-red-100 text-red-800'
-                                    : 'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                  {bill.status.replace('_', ' ')}
-                                </span>
-                              </div>
-                              <div className="ml-2 flex-shrink-0 flex items-center">
-                                <p className="text-sm text-gray-500 mr-2">
-                                  ₹{bill.amount.toLocaleString()}
-                                </p>
-                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                              </div>
-                            </div>
-                            <div className="mt-2 sm:flex sm:justify-between">
-                              <div className="sm:flex">
-                                <p className="flex items-center text-sm text-gray-500">
-                                  Submitted: {new Date(bill.submittedAt).toLocaleDateString()}
-                                </p>
-                              </div>
-                            </div>
+                <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <div className="flex flex-col gap-1">
+                            <span>Title</span>
+                            <input
+                              type="text"
+                              placeholder="Filter..."
+                              value={columnFilters.title}
+                              onChange={(e) => setColumnFilters(prev => ({ ...prev, title: e.target.value }))}
+                              className="mt-1 px-2 py-1 text-xs border border-gray-300 rounded-md bg-white text-gray-900 normal-case"
+                              onClick={(e) => e.stopPropagation()}
+                            />
                           </div>
-                        </Link>
-                      </li>
-                    ))}
-                    {filteredBills.length === 0 && (
-                      <li>
-                        <div className="px-4 py-8 text-center">
-                          <p className="text-gray-500">
-                            {billFilter === 'all' 
-                              ? 'No bills found' 
-                              : `No bills found for ${billFilter === 'today' ? 'today' : billFilter === 'week' ? 'this week' : 'this month'}`
-                            }
-                          </p>
-                        </div>
-                      </li>
-                    )}
-                  </ul>
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <div className="flex flex-col gap-1">
+                            <span>Firm</span>
+                            <input
+                              type="text"
+                              placeholder="Filter..."
+                              value={columnFilters.firm}
+                              onChange={(e) => setColumnFilters(prev => ({ ...prev, firm: e.target.value }))}
+                              className="mt-1 px-2 py-1 text-xs border border-gray-300 rounded-md bg-white text-gray-900 normal-case"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Amount
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <div className="flex flex-col gap-1 relative status-dropdown-container">
+                            <span>Status</span>
+                            <button
+                              type="button"
+                              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                              className="mt-1 px-2 py-1 text-xs border border-gray-300 rounded-md bg-white text-gray-700 normal-case text-left flex justify-between items-center hover:bg-gray-50"
+                            >
+                              <span>{columnFilters.status.length > 0 ? `${columnFilters.status.length} selected` : 'Filter...'}</span>
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                            {showStatusDropdown && (
+                              <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-300 rounded-md shadow-lg z-50 max-h-64 overflow-y-auto">
+                                <div className="p-2 space-y-1">
+                                  {Object.values(BillStatus).map((status) => (
+                                    <label key={status} className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={columnFilters.status.includes(status)}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setColumnFilters(prev => ({
+                                              ...prev,
+                                              status: [...prev.status, status]
+                                            }));
+                                          } else {
+                                            setColumnFilters(prev => ({
+                                              ...prev,
+                                              status: prev.status.filter(s => s !== status)
+                                            }));
+                                          }
+                                        }}
+                                        className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                      <span className="text-xs text-gray-700 normal-case">
+                                        {status.replace(/_/g, ' ')}
+                                      </span>
+                                    </label>
+                                  ))}
+                                  {columnFilters.status.length > 0 && (
+                                    <button
+                                      onClick={() => setColumnFilters(prev => ({ ...prev, status: [] }))}
+                                      className="w-full mt-2 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
+                                    >
+                                      Clear All
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Submitted Date
+                        </th>
+                        <th scope="col" className="relative px-6 py-3">
+                          <span className="sr-only">Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {paginatedBills.map((bill) => {
+                        const submitter = state.users.find(u => u.id === bill.submittedBy);
+                        return (
+                          <tr 
+                            key={bill.id} 
+                            onClick={() => router.push(`/bill/${bill.id}`)}
+                            className="hover:bg-gray-50 transition-colors cursor-pointer"
+                          >
+                            <td className="px-6 py-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {bill.title}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm text-gray-500 truncate">
+                                {state.firms.find(f => f.id === bill.firmId)?.name || '-'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-semibold text-gray-900">
+                                ₹{bill.amount.toLocaleString('en-IN')}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                bill.status === BillStatus.FINAL_APPROVED
+                                  ? 'bg-green-100 text-green-800'
+                                  : bill.status === BillStatus.REJECTED || bill.status === BillStatus.FINAL_REJECTED
+                                  ? 'bg-red-100 text-red-800'
+                                  : bill.status === BillStatus.VERIFIED || bill.status === BillStatus.DATA_APPROVED
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : bill.status === BillStatus.DATA_ENTRY_COMPLETED
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {bill.status.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                {new Date(bill.submittedAt).toLocaleDateString('en-IN', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric'
+                                })}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {new Date(bill.submittedAt).toLocaleTimeString('en-IN', {
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              {(hasRole(user, UserRole.ADMIN) || bill.submittedBy === user.id) && (
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (confirm('Are you sure you want to delete this bill?')) {
+                                      try {
+                                        const response = await fetch(`http://localhost:5000/api/bills/${bill.id}`, {
+                                          method: 'DELETE',
+                                        });
+                                        if (response.ok) {
+                                          dispatch({ type: 'DELETE_BILL', payload: bill.id });
+                                        } else {
+                                          alert('Failed to delete bill');
+                                        }
+                                      } catch (error) {
+                                        console.error('Error deleting bill:', error);
+                                        alert('Error deleting bill');
+                                      }
+                                    }
+                                  }}
+                                  className="text-red-600 hover:text-red-900 transition-colors"
+                                  title="Delete bill"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {paginatedBills.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-8 text-center">
+                            <p className="text-gray-500">
+                              {billFilter === 'all' 
+                                ? 'No bills found' 
+                                : `No bills found for ${billFilter === 'today' ? 'today' : billFilter === 'week' ? 'this week' : 'this month'}`
+                              }
+                            </p>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-4 rounded-lg shadow">
+                    <div className="flex-1 flex justify-between sm:hidden">
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                          currentPage === 1
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        className={`ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                          currentPage === totalPages
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        Next
+                      </button>
+                    </div>
+                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm text-gray-700">
+                          Page <span className="font-medium">{currentPage}</span> of{' '}
+                          <span className="font-medium">{totalPages}</span>
+                        </p>
+                      </div>
+                      <div>
+                        <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                          <button
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                            className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 text-sm font-medium ${
+                              currentPage === 1
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-white text-gray-500 hover:bg-gray-50'
+                            }`}
+                          >
+                            <span className="sr-only">Previous</span>
+                            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                          
+                          {/* Page numbers */}
+                          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                            // Show first page, last page, current page, and pages around current
+                            if (
+                              page === 1 ||
+                              page === totalPages ||
+                              (page >= currentPage - 1 && page <= currentPage + 1)
+                            ) {
+                              return (
+                                <button
+                                  key={page}
+                                  onClick={() => setCurrentPage(page)}
+                                  className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                                    page === currentPage
+                                      ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                                      : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              );
+                            } else if (page === currentPage - 2 || page === currentPage + 2) {
+                              return (
+                                <span
+                                  key={page}
+                                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700"
+                                >
+                                  ...
+                                </span>
+                              );
+                            }
+                            return null;
+                          })}
+
+                          <button
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages}
+                            className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 text-sm font-medium ${
+                              currentPage === totalPages
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-white text-gray-500 hover:bg-gray-50'
+                            }`}
+                          >
+                            <span className="sr-only">Next</span>
+                            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </nav>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}
 
           {/* Firms Tab */}
-          {activeTab === 'firms' && hasRole(user, UserRole.ADMIN) && (
+          {activeTab === 'firms' && (hasRole(user, UserRole.ADMIN) || hasRole(user, UserRole.SUBMITTER)) && (
             <div className="space-y-6">
               {/* Firm Form */}
               <div className="bg-white shadow rounded-lg p-6">
