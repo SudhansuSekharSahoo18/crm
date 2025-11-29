@@ -9,13 +9,13 @@ import billRoutes from './routes/bills';
 import uploadRoutes from './routes/upload';
 import userRoutes from './routes/users';
 import firmRoutes from './routes/firms';
+import { SERVER_CONFIG, BASE_URL } from './config/constants';
 // Import database service to initialize it
 import './services/databaseService';
 
 config();
 
 const app = express();
-const PORT = 5000; // Force port 5000
 
 // Middleware
 app.use(cors());
@@ -101,6 +101,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 console.log('🚀 Starting CRM Backend Server...');
 console.log('📁 Database: SQLite (local file-based database)');
+console.log(`🌐 Port: ${SERVER_CONFIG.PORT} (from ${process.env.PORT ? '.env' : 'default'})`);
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -150,6 +151,7 @@ app.use('*', (req, res) => {
 });
 
 // Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+app.listen(SERVER_CONFIG.PORT, () => {
+  console.log(`✅ Server is running on ${BASE_URL}`);
+  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });

@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { ocrService } from '../services/ocrService';
+import { getUploadUrl, UPLOAD_CONFIG } from '../config/constants';
 
 const router = Router();
 
@@ -29,11 +30,11 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage: storage,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: UPLOAD_CONFIG.MAX_FILE_SIZE
   },
   fileFilter: (req, file, cb) => {
     // Accept common document formats
-    const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx/;
+    const allowedTypes = UPLOAD_CONFIG.ALLOWED_FILE_TYPES;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
 
@@ -52,7 +53,7 @@ router.post('/upload', upload.single('file'), (req: Request, res: Response) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const fileUrl = `http://localhost:5000/uploads/bills/${req.file.filename}`;
+    const fileUrl = getUploadUrl(req.file.filename);
     
     res.status(200).json({
       success: true,
@@ -78,7 +79,7 @@ router.post('/upload-multiple', upload.fields([
     
     if (files.billFile && files.billFile[0]) {
       const billFile = files.billFile[0];
-      const fileUrl = `http://localhost:5000/uploads/bills/${billFile.filename}`;
+      const fileUrl = getUploadUrl(billFile.filename);
       const filePath = billFile.path;
       
       result.billFile = {
@@ -113,7 +114,7 @@ router.post('/upload-multiple', upload.fields([
       const transportFile = files.transportFile[0];
       result.transportFile = {
         fileName: transportFile.originalname,
-        fileUrl: `http://localhost:5000/uploads/bills/${transportFile.filename}`
+        fileUrl: getUploadUrl(transportFile.filename)
       };
     }
     
