@@ -50,6 +50,13 @@ class UserService {
     }
     return user;
   }
+
+  async findByPhone(phone: string) {
+    console.log('UserService: Looking for user with phone:', phone);
+    const user = await this.db.getUserByPhone(phone);
+    console.log('UserService: User found:', user ? 'Yes' : 'No');
+    return user;
+  }
 }
 
 export default new UserService();

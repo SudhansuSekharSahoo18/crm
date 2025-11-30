@@ -27,16 +27,24 @@ export const registerUser = async (userData: { email: string; password: string; 
   }
 };
 
-export const loginUser = async (credentials: { email: string; password: string }) => {
-  const { email, password } = credentials;
+export const loginUser = async (credentials: { email?: string; phone?: string; password: string }) => {
+  const { email, phone, password } = credentials;
 
   try {
-    console.log('Login attempt for email:', email);
-    const user = await userService.findByEmail(email);
+    const identifier = email || phone;
+    console.log('Login attempt for:', identifier);
+    
+    let user;
+    if (email) {
+      user = await userService.findByEmail(email);
+    } else if (phone) {
+      user = await userService.findByPhone(phone);
+    }
+    
     console.log('User found:', user ? 'Yes' : 'No');
     
     if (!user) {
-      console.log('No user found with email:', email);
+      console.log('No user found with identifier:', identifier);
       throw new Error('Invalid credentials');
     }
     
@@ -77,13 +85,13 @@ export const loginUser = async (credentials: { email: string; password: string }
     }
 
     const token = jwt.sign({ id: user.id, roles: user.roles }, JWT_SECRET, { expiresIn: '1h' });
-    console.log('Login successful for user:', email);
+    console.log('Login successful for user:', identifier);
     return { 
       token, 
-      user: { id: user.id, email: user.email, name: user.name, roles: user.roles }
+      user: { id: user.id, email: user.email, name: user.name, roles: user.roles, phone: user.phone }
     };
   } catch (error: any) {
-    console.error('Login error for', email, ':', error.message);
+    console.error('Login error:', error.message);
     throw new Error('Error logging in: ' + error.message);
   }
 };

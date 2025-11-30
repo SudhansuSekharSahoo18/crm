@@ -103,13 +103,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
+      // Detect if username is email or phone
+      const isEmail = username.includes('@');
+      const loginPayload = isEmail 
+        ? { email: username, password }
+        : { phone: username, password };
+      
       // Call backend login API
       const response = await fetch(API_ENDPOINTS.AUTH_LOGIN, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email: username, password }),
+        body: JSON.stringify(loginPayload),
       });
 
       if (response.ok) {
@@ -120,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: data.user.id.toString(),
           username: data.user.name || data.user.email,
           email: data.user.email,
+          phone: data.user.phone,
           roles: Array.isArray(data.user.roles) ? data.user.roles.map((r: string) => r as UserRole) : [UserRole.SUBMITTER],
           createdAt: new Date(data.user.createdAt || new Date()),
           createdBy: 'system',

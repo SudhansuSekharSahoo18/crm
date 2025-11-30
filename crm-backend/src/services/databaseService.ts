@@ -103,6 +103,15 @@ class DatabaseService {
       } else {
         console.log('Users table ready');
         
+        // Add phone column if it doesn't exist (for existing databases)
+        this.db.run('ALTER TABLE users ADD COLUMN phone TEXT', (phoneErr) => {
+          if (phoneErr && !phoneErr.message.includes('duplicate column')) {
+            console.error('Error adding phone column:', phoneErr.message);
+          } else {
+            console.log('Phone column ready');
+          }
+        });
+        
         // Create user_roles table
         this.db.run(createUserRolesTable, (rolesErr) => {
           if (rolesErr) {
@@ -301,6 +310,28 @@ class DatabaseService {
         GROUP BY u.id
       `;
       this.db.get(sql, [email], (err, row: any) => {
+        if (err) {
+          reject(err);
+        } else {
+          if (row) {
+            row.roles = row.roles ? row.roles.split(',') : ['SUBMITTER'];
+          }
+          resolve(row);
+        }
+      });
+    });
+  }
+
+  getUserByPhone(phone: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const sql = `
+        SELECT u.*, GROUP_CONCAT(ur.role) as roles
+        FROM users u
+        LEFT JOIN user_roles ur ON u.id = ur.userId
+        WHERE u.phone = ?
+        GROUP BY u.id
+      `;
+      this.db.get(sql, [phone], (err, row: any) => {
         if (err) {
           reject(err);
         } else {

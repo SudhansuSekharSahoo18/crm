@@ -26,6 +26,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  phone?: string;
   password?: string; // Optional for security - not always included in responses
   roles: UserRole[];
   createdAt: Date;

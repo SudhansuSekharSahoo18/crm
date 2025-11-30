@@ -4,10 +4,11 @@ import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginForm() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email');
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -16,9 +17,9 @@ export default function LoginForm() {
     setError('');
 
     try {
-      const success = await login(email, password);
+      const success = await login(identifier, password);
       if (!success) {
-        setError('Invalid email or password');
+        setError('Invalid credentials');
       }
     } catch (err) {
       setError('Login failed. Please try again.');
@@ -39,25 +40,26 @@ export default function LoginForm() {
           </p>
           <div className="mt-4 text-xs text-gray-500 space-y-1">
             <p><strong>Demo Credentials:</strong></p>
-            <p>Use any registered user's email and password</p>
+            <p>Use any registered user's email/phone and password</p>
             <p>You can create users from the Users Management page</p>
           </div>
         </div>
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
-              <label htmlFor="email" className="sr-only">
-                Email
+              <label htmlFor="identifier" className="sr-only">
+                {loginMethod === 'email' ? 'Email' : 'Phone Number'}
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
+                id="identifier"
+                name="identifier"
+                type={loginMethod === 'email' ? 'email' : 'tel'}
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                placeholder={loginMethod === 'email' ? 'Email address' : 'Phone number'}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
               />
             </div>
             <div>
@@ -90,6 +92,19 @@ export default function LoginForm() {
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
               {loading ? 'Signing in...' : 'Sign in'}
+            </button>
+          </div>
+          
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setLoginMethod(loginMethod === 'email' ? 'phone' : 'email');
+                setIdentifier('');
+              }}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+            >
+              {loginMethod === 'email' ? 'Login using Phone Number' : 'Login using Email'}
             </button>
           </div>
         </form>
