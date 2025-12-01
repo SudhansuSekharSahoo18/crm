@@ -27,12 +27,13 @@ export const registerUser = async (userData: { email: string; password: string; 
   }
 };
 
-export const loginUser = async (credentials: { email?: string; phone?: string; password: string }) => {
-  const { email, phone, password } = credentials;
+export const loginUser = async (credentials: { email?: string; phone?: string; password: string; firebaseToken?: string }) => {
+  const { email, phone, password, firebaseToken } = credentials;
 
   try {
     const identifier = email || phone;
     console.log('Login attempt for:', identifier);
+    console.log('Firebase token provided:', !!firebaseToken);
     
     let user;
     if (email) {
@@ -45,43 +46,62 @@ export const loginUser = async (credentials: { email?: string; phone?: string; p
     
     if (!user) {
       console.log('No user found with identifier:', identifier);
-      throw new Error('Invalid credentials');
-    }
-    
-    console.log('Comparing password...');
-    console.log('Plain text password length:', password.length);
-    console.log('Hashed password from DB:', user.password);
-    console.log('Plain text password:', password);
-    console.log('Hashed password length:', user.password ? user.password.length : 'null');
-    
-    let passwordMatch = false;
-    
-    // Check if password is hashed (bcrypt hashes start with $2b$ and are 60 chars long)
-    const isHashed = user.password.startsWith('$2b$') && user.password.length === 60;
-    
-    if (isHashed) {
-      // Password is hashed, use bcrypt compare
-      passwordMatch = await bcrypt.compare(password, user.password);
-      console.log('Using bcrypt compare - Password match:', passwordMatch);
-    } else {
-      // Password is plain text, do direct comparison (temporary fix)
-      passwordMatch = password === user.password;
-      console.log('Using plain text compare - Password match:', passwordMatch);
       
-      // Hash the password for future use
-      if (passwordMatch) {
-        console.log('Updating password to hashed version...');
-        const hashedPassword = await bcrypt.hash(password, 10);
-        // Update password in database (fire and forget)
-        userService.findByIdAndUpdate(user.id, { password: hashedPassword }).catch(err => {
-          console.error('Error updating password hash:', err);
+      // If Firebase token is provided but user doesn't exist, create the user
+      if (firebaseToken && phone) {
+        console.log('Creating new user for Firebase phone auth:', phone);
+        user = await userService.create({
+          email: `${phone}@firebase.phone`,
+          name: phone,
+          phone: phone,
+          password: await bcrypt.hash(Math.random().toString(36), 10), // Random password
+          roles: ['SUBMITTER'],
         });
+        console.log('New user created:', user.id);
+      } else {
+        throw new Error('Invalid credentials');
       }
     }
     
-    if (!passwordMatch) {
-      console.log('Password does not match for user:', email);
-      throw new Error('Invalid credentials');
+    // Skip password validation if Firebase token is provided
+    if (!firebaseToken) {
+      console.log('Comparing password...');
+      console.log('Plain text password length:', password.length);
+      console.log('Hashed password from DB:', user.password);
+      console.log('Plain text password:', password);
+      console.log('Hashed password length:', user.password ? user.password.length : 'null');
+      
+      let passwordMatch = false;
+      
+      // Check if password is hashed (bcrypt hashes start with $2b$ and are 60 chars long)
+      const isHashed = user.password.startsWith('$2b$') && user.password.length === 60;
+      
+      if (isHashed) {
+        // Password is hashed, use bcrypt compare
+        passwordMatch = await bcrypt.compare(password, user.password);
+        console.log('Using bcrypt compare - Password match:', passwordMatch);
+      } else {
+        // Password is plain text, do direct comparison (temporary fix)
+        passwordMatch = password === user.password;
+        console.log('Using plain text compare - Password match:', passwordMatch);
+        
+        // Hash the password for future use
+        if (passwordMatch) {
+          console.log('Updating password to hashed version...');
+          const hashedPassword = await bcrypt.hash(password, 10);
+          // Update password in database (fire and forget)
+          userService.findByIdAndUpdate(user.id, { password: hashedPassword }).catch(err => {
+            console.error('Error updating password hash:', err);
+          });
+        }
+      }
+      
+      if (!passwordMatch) {
+        console.log('Password does not match for user:', email);
+        throw new Error('Invalid credentials');
+      }
+    } else {
+      console.log('Skipping password validation (Firebase authenticated)');
     }
 
     const token = jwt.sign({ id: user.id, roles: user.roles }, JWT_SECRET, { expiresIn: '1h' });

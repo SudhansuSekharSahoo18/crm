@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@types/multer": "^2.0.0",
+    "firebase": "^12.6.0",
     "multer": "^2.0.2",
     "next": "16.0.1",
     "react": "19.2.0",

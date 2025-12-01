@@ -8,7 +8,8 @@
     "dev": "ts-node-dev src/app.ts",
     "build": "tsc",
     "migrate": "prisma migrate dev",
-    "generate": "prisma generate"
+    "generate": "prisma generate",
+    "seed:admin": "ts-node src/scripts/seedAdmin.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

@@ -8,7 +8,7 @@ import { User, UserRole } from '@/types';
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string, firebaseToken?: string) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -101,13 +101,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const router = useRouter();
 
-  const login = async (username: string, password: string): Promise<boolean> => {
+  const login = async (username: string, password: string, firebaseToken?: string): Promise<boolean> => {
     try {
       // Detect if username is email or phone
       const isEmail = username.includes('@');
-      const loginPayload = isEmail 
+      const loginPayload: any = isEmail 
         ? { email: username, password }
         : { phone: username, password };
+      
+      // Add Firebase token if provided
+      if (firebaseToken) {
+        loginPayload.firebaseToken = firebaseToken;
+      }
       
       // Call backend login API
       const response = await fetch(API_ENDPOINTS.AUTH_LOGIN, {

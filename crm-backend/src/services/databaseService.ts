@@ -255,10 +255,14 @@ class DatabaseService {
   }
 
   // User operations
-  createUser(name: string, email: string, password: string, roles: string[]): Promise<any> {
+  createUser(name: string, email: string, password: string, roles: string[], phone?: string): Promise<any> {
     return new Promise((resolve, reject) => {
-      const userSql = `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`;
-      this.db.run(userSql, [name, email, password], (err) => {
+      const userSql = phone 
+        ? `INSERT INTO users (name, email, password, phone) VALUES (?, ?, ?, ?)`
+        : `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`;
+      const params = phone ? [name, email, password, phone] : [name, email, password];
+      
+      this.db.run(userSql, params, (err) => {
         if (err) {
           reject(err);
         } else {
@@ -287,6 +291,7 @@ class DatabaseService {
                     id: userId,
                     name,
                     email,
+                    phone,
                     roles: roles,
                     createdAt: new Date(),
                     updatedAt: new Date()

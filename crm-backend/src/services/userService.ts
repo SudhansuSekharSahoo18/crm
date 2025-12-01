@@ -11,7 +11,7 @@ class UserService {
     return await this.db.getAllUsers();
   }
 
-  async create(userData: { username?: string; name?: string; email: string; password: string; roles?: string[]; role?: string }) {
+  async create(userData: { username?: string; name?: string; email: string; password: string; roles?: string[]; role?: string; phone?: string }) {
     // Handle both username and name fields for compatibility
     const name = userData.name || userData.username;
     // Handle both roles array and single role for compatibility
@@ -21,7 +21,7 @@ class UserService {
       throw new Error('Name, email, and password are required');
     }
 
-    return await this.db.createUser(name, userData.email, userData.password, roles);
+    return await this.db.createUser(name, userData.email, userData.password, roles, userData.phone);
   }
 
   async findById(id: number) {

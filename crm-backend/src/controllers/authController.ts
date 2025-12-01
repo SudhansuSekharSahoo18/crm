@@ -40,26 +40,38 @@ export const bootstrap = async (req: Request, res: Response) => {
     const migration = new PasswordMigration();
     await migration.migratePasswordsToHash();
     
-    // Check if any users exist
-    const users = await userService.findAll();
-    if (users.length > 0) {
-      return res.status(200).json({ message: 'Password migration completed. Users already exist.' });
+    // Check if admin user already exists
+    const existingAdmin = await userService.findByEmail('admin@crm.com');
+    if (existingAdmin) {
+      return res.status(200).json({ 
+        message: 'Admin user already exists.',
+        loginInfo: {
+          email: 'admin@crm.com',
+          password: 'Admin@123',
+          phone: '+919876543210'
+        }
+      });
     }
 
-    // Create initial admin user
+    // Create admin user with both email and phone
     const adminUser = await registerUser({
-      email: 'admin@test.com',
-      password: 'password123',
+      email: 'admin@crm.com',
+      password: 'Admin@123',
       name: 'Admin User',
       roles: ['ADMIN']
     });
+
+    // Update user to add phone number
+    await userService.findByIdAndUpdate(adminUser.id, { phone: '+919876543210' });
 
     res.status(201).json({ 
       message: 'Admin user created successfully', 
       user: adminUser,
       loginInfo: {
-        email: 'admin@test.com',
-        password: 'password123'
+        email: 'admin@crm.com',
+        password: 'Admin@123',
+        phone: '+919876543210',
+        note: 'You need to manually create this user in Firebase Console with the same email and password. For phone auth, add +919876543210 as a test phone number in Firebase Console.'
       }
     });
   } catch (error: any) {

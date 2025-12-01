@@ -34,13 +34,30 @@ export const validateUser = [
 ];
 
 export const validateLogin = [
-  body('email').isEmail().withMessage('Valid email is required'),
-  body('password').notEmpty().withMessage('Password is required'),
+  body('email').optional().isEmail().withMessage('Valid email is required'),
+  body('phone').optional().notEmpty().withMessage('Valid phone number is required'),
+  body('password').optional().notEmpty().withMessage('Password is required'),
+  body('firebaseToken').optional().isString().withMessage('Firebase token must be a string'),
   (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
+    
+    // Custom validation: must have either email or phone
+    if (!req.body.email && !req.body.phone) {
+      return res.status(400).json({ 
+        errors: [{ msg: 'Either email or phone number is required' }] 
+      });
+    }
+    
+    // Custom validation: must have either password or firebaseToken
+    if (!req.body.password && !req.body.firebaseToken) {
+      return res.status(400).json({ 
+        errors: [{ msg: 'Either password or Firebase token is required' }] 
+      });
+    }
+    
     next();
   },
 ];

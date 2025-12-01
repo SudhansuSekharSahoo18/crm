@@ -1,6 +1,6 @@
-# CRM System - Role-Based Workflow for Bill Processing
+# Workflow System - Role-Based Workflow for Bill Processing
 
-A comprehensive React-based CRM application built with Next.js that implements a role-based workflow system for bill processing. The system supports sequential workflow stages with proper access control, audit trails, and user management.
+A comprehensive React-based Workflow application built with Next.js that implements a role-based workflow system for bill processing. The system supports sequential workflow stages with proper access control, audit trails, and user management.
 
 ## Features
 
