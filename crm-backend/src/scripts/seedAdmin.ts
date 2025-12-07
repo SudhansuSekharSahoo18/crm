@@ -1,11 +1,11 @@
-import DatabaseService from '../services/databaseService';
+import SQLServerService from '../services/sqlServerService';
 import bcrypt from 'bcrypt';
 
 async function seedAdminUser() {
-  const db = new DatabaseService();
+  const db = SQLServerService;
   
   try {
-    console.log('🌱 Seeding admin user...');
+    console.log('🌱 Seeding admin user to Azure SQL Server...');
     
     // Check if admin already exists
     const existingAdmin = await db.getUserByEmail('admin@crm.com');
@@ -15,6 +15,7 @@ async function seedAdminUser() {
       console.log('📧 Email: admin@crm.com');
       console.log('📱 Phone: +919876543210');
       console.log('🔑 Password: Admin@123');
+      await db.close();
       return;
     }
     
@@ -30,7 +31,7 @@ async function seedAdminUser() {
       '+919876543210'
     );
     
-    console.log('✅ Admin user created successfully!');
+    console.log('✅ Admin user created successfully in Azure SQL Server!');
     console.log('\n📋 Admin Credentials:');
     console.log('   Email: admin@crm.com');
     console.log('   Phone: +919876543210');
@@ -44,8 +45,10 @@ async function seedAdminUser() {
     console.log('      Code: 123456');
     console.log('\n✨ You can now login with either email or phone!\n');
     
+    await db.close();
   } catch (error: any) {
     console.error('❌ Error seeding admin user:', error.message);
+    await db.close();
     process.exit(1);
   }
   

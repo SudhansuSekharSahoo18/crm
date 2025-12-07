@@ -1,20 +1,23 @@
-import { PrismaClient } from '@prisma/client';
+import { config as dotenvConfig } from 'dotenv';
 
-const prisma = new PrismaClient();
+dotenvConfig();
 
-const connectToDatabase = async () => {
-  try {
-    await prisma.$connect();
-    console.log('Database connected successfully (SQLite)');
-  } catch (error) {
-    console.error('Database connection failed:', error);
-    console.log('⚠️  Continuing without database connection...');
-    // Don't throw error to prevent app crash
+export const sqlConfig = {
+  user: process.env.DB_USER || 'sqladmin',
+  password: process.env.DB_PASSWORD || '',
+  server: process.env.DB_SERVER || 'localhost',
+  database: process.env.DB_NAME || 'crm_db',
+  options: {
+    encrypt: process.env.DB_ENCRYPT === 'true', // Use true for Azure
+    trustServerCertificate: process.env.DB_TRUST_CERT === 'true', // Use true for local dev
+    enableArithAbort: true,
+    port: parseInt(process.env.DB_PORT || '1433'),
+    connectTimeout: 30000,
+    requestTimeout: 30000
+  },
+  pool: {
+    max: 10,
+    min: 0,
+    idleTimeoutMillis: 30000
   }
 };
-
-const disconnectFromDatabase = async () => {
-  await prisma.$disconnect();
-};
-
-export { connectToDatabase, disconnectFromDatabase, prisma };

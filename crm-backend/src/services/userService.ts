@@ -1,11 +1,7 @@
-import DatabaseService from './databaseService';
+import SQLServerService from './sqlServerService';
 
 class UserService {
-  private db: DatabaseService;
-
-  constructor() {
-    this.db = new DatabaseService();
-  }
+  private db = SQLServerService;
 
   async findAll() {
     return await this.db.getAllUsers();
